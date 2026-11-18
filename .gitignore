@@ -1,0 +1,9 @@
+.local/
+.claude/
+.env
+.venv/
+__pycache__/
+*.egg-info/
+.DS_Store
+jobs/logs/
+results/runs/
