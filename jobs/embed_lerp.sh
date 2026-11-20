@@ -18,6 +18,6 @@ echo "start: $(date)"
 
 source .venv/bin/activate
 
-PYTHONPATH="$PWD" python scripts/embed_lerp.py --job-id "$JOB_ID" "$@"
+PYTHONPATH="$PWD" .venv/bin/python scripts/embed_lerp.py --job-id "$JOB_ID" "$@"
 
 echo "end: $(date)"
