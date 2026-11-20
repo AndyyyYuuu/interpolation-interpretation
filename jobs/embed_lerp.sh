@@ -7,7 +7,7 @@
 #SBATCH -o jobs/logs/JOB%j.out
 #SBATCH -e jobs/logs/JOB%j-err.out
 
-set -euo pipefail
+set -uo
 
 cd "${SLURM_SUBMIT_DIR:-$PWD}"
 mkdir -p jobs/logs

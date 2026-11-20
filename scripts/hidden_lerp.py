@@ -12,7 +12,7 @@ load_dotenv()
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-name", default="ibm-granite/granite-4.0-350m")
+    parser.add_argument("--model-name", default="meta-llama/Llama-3.2-1B-Instruct")
     parser.add_argument("--str-0", default="The most common color for bananas is")
     parser.add_argument("--str-1", default="The most common color for apples is")
     parser.add_argument("--classes", nargs="+", default=[" yellow", " green", " red"])

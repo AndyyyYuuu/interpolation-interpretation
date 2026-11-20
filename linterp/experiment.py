@@ -85,23 +85,31 @@ class HiddenLerp:
         self._dummy_ids = torch.zeros_like(ids_0)
 
         with self.model.trace(ids_0):
-            h0 = [self.model.model.layers[i].output[0].save() for i in range(self.n_layers)]
+            h0 = [self.model.model.layers[i].output.save() for i in range(self.n_layers)]
+            self.h0 = [h.cpu() for h in h0]
 
         with self.model.trace(ids_1):
-            h1 = [self.model.model.layers[i].output[0].save() for i in range(self.n_layers)]
-
-        self.h0 = h0  # list of (1, seq_len, hidden) tensors, one per layer
-        self.h1 = h1
+            h1 = [self.model.model.layers[i].output.save() for i in range(self.n_layers)]
+            self.h1 = [h.cpu() for h in h1]
+        
 
     @property
     def device(self) -> torch.device:
         return self.model.device
 
     def forward(self, weight: float, layer: int) -> torch.Tensor:
-        lerped = torch.lerp(self.h0[layer], self.h1[layer], weight)
+        lerped = torch.lerp(self.h0[layer].to(self.device), self.h1[layer].to(self.device), weight)
         with self.model.trace(self._dummy_ids):
             self.model.model.layers[layer].output = lerped
             logits = self.model.output.save()
 
         probs = torch.softmax(logits.logits[0, -1].float(), dim=-1)
-        return probs[self.tracked_ids].cpu()
+        result = probs[self.tracked_ids].cpu()
+
+        del lerped, logits, probs
+        if torch.backends.mps.is_available():
+            torch.mps.empty_cache()
+        elif torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+        return result
