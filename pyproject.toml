@@ -1,0 +1,25 @@
+[project]
+name = "linterp"
+version = "0.0.1"
+description = "Linear interpolation experiments on transformer hidden states"
+requires-python = ">=3.10"
+dependencies = [
+    "torch",
+    "nnsight",
+    "accelerate",
+    "tqdm",
+    "matplotlib",
+    "python-dotenv",
+    "huggingface-hub",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["linterp*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
