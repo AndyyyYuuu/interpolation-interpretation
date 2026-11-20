@@ -19,7 +19,7 @@ def plot_embed(data: dict) -> None:
 
     fig, ax = plt.subplots(figsize=(8, 5))
     for i, label in enumerate(labels):
-        ax.plot(weights, results[:, i].numpy(), label=label, color=COLORS[i % len(COLORS)])
+        ax.plot(weights, results[:, i].float().detach().numpy(), label=label, color=COLORS[i % len(COLORS)])
     ax.set_xlabel("Interpolation weight")
     ax.set_ylabel("Next-token probability")
     ax.set_title(model)

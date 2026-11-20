@@ -25,7 +25,7 @@ class EmbedLerp:
 
     def __init__(self, model_name: str, prompt: str, tok_0: str, tok_1: str, classes: list[str]):
         _hf_login_if_needed()
-        self.model = LanguageModel(model_name, device_map="auto", dispatch=True)
+        self.model = LanguageModel(model_name, device_map="auto", dispatch=True, torch_dtype=torch.float32)
         self.name = model_name
 
         tokenizer = self.model.tokenizer
@@ -62,7 +62,7 @@ class EmbedLerp:
             self.model.model.embed_tokens.output = total
             logits = self.model.output.save()
 
-        probs = torch.softmax(logits.logits[0, -1], dim=-1)
+        probs = torch.softmax(logits.logits[0, -1].float(), dim=-1)
         return probs[self.tracked_ids].cpu()
 
 
@@ -71,7 +71,7 @@ class HiddenLerp:
 
     def __init__(self, model_name: str, str_0: str, str_1: str, classes: list[str]):
         _hf_login_if_needed()
-        self.model = LanguageModel(model_name, device_map="auto", dispatch=True)
+        self.model = LanguageModel(model_name, device_map="auto", dispatch=True, torch_dtype=torch.float32)
         self.name = model_name
         self.n_layers = self.model.config.num_hidden_layers
 
@@ -103,5 +103,5 @@ class HiddenLerp:
             self.model.model.layers[layer].output = lerped
             logits = self.model.output.save()
 
-        probs = torch.softmax(logits.logits[0, -1], dim=-1)
+        probs = torch.softmax(logits.logits[0, -1].float(), dim=-1)
         return probs[self.tracked_ids].cpu()

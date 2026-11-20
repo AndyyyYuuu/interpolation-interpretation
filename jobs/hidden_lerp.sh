@@ -9,14 +9,15 @@
 
 set -euo pipefail
 
-cd "$SLURM_SUBMIT_DIR"
+cd "${SLURM_SUBMIT_DIR:-$PWD}"
 mkdir -p jobs/logs
 
-echo "job $SLURM_JOB_ID running on $SLURM_NODELIST"
+JOB_ID="${SLURM_JOB_ID:-local}"
+echo "job $JOB_ID running on ${SLURM_NODELIST:-localhost}"
 echo "start: $(date)"
 
 source .venv/bin/activate
 
-PYTHONPATH="$PWD" python scripts/hidden_lerp.py --job-id "$SLURM_JOB_ID" "$@"
+PYTHONPATH="$PWD" python scripts/hidden_lerp.py --job-id "$JOB_ID" "$@"
 
 echo "end: $(date)"
