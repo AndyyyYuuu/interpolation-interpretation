@@ -6,4 +6,4 @@ if [ ! -d ".venv" ]; then
 fi
 
 source .venv/bin/activate
-pip install -e .
+python3 -m pip install -e .

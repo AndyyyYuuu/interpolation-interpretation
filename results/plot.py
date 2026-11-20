@@ -46,7 +46,7 @@ def animate_hidden(data: dict, interval: int = 150) -> None:
 
     def update(layer):
         for i, line in enumerate(lines):
-            line.set_data(weights, results[layer, :, i].numpy())
+            line.set_data(weights, results[layer, :, i].detach().numpy())
         ax.set_title(f"{model}  |  Layer {layer + 1}/{n_layers}")
         return lines
 
