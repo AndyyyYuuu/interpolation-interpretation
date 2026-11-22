@@ -36,15 +36,19 @@ config = {
 
 run_dir = prep_run(config, output_root=args.output_root)
 
-exp = HiddenLerp(args.model_name, args.str_0, args.str_1, args.classes)
+experiment = HiddenLerp(args.model_name, args.str_0, args.str_1, args.classes)
 
 weights = [i / args.steps for i in range(args.steps + 1)]
-results = torch.stack([
-    torch.stack([exp.forward(w, layer) for w in weights])
-    for layer in tqdm.tqdm(range(exp.n_layers), desc="layers")
-])  # (n_layers, steps+1, n_classes)
+layer_resids, layer_probs = [], []
+for layer in tqdm.tqdm(range(experiment.n_layers), desc="layers"):
+    norm_resid, partial_probs = zip(*[experiment.forward(w, layer) for w in weights])
+    layer_resids.append(torch.stack(norm_resid))
+    layer_probs.append(torch.stack(partial_probs))
+
+norm_resid = torch.stack(layer_resids)    # (n_layers, steps+1, seq_len, hidden)
+partial_probs = torch.stack(layer_probs)  # (n_layers, steps+1, n_classes)
 
 torch.save(
-    {"results": results, "weights": weights, "labels": args.classes, "model": args.model_name},
+    {"partial_probs": partial_probs, "norm_resid": norm_resid, "weights": weights, "labels": args.classes, "model": args.model_name},
     run_dir / "output.pt",
 )

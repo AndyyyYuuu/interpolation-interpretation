@@ -5,6 +5,7 @@ description = "Linear interpolation experiments on transformer hidden states"
 requires-python = ">=3.10"
 dependencies = [
     "torch",
+    "einops",
     "nnsight",
     "accelerate",
     "tqdm",

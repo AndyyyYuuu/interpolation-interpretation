@@ -1,6 +1,7 @@
 import os
 import torch
 from nnsight import LanguageModel
+from einops import rearrange
 
 _HF_LOGIN_DONE = False
 
@@ -51,19 +52,23 @@ class EmbedLerp:
     def device(self) -> torch.device:
         return self.model.device
 
-    def forward(self, weight: float) -> torch.Tensor:
+    @torch.no_grad()
+    def forward(self, weight: float) -> tuple[torch.Tensor, torch.Tensor]:
         lerped = torch.lerp(self.embed_0, self.embed_1, weight)
         total = torch.cat([
             self.prefix_embeds, lerped.unsqueeze(0), self.suffix_embeds
         ], dim=0).unsqueeze(0).to(device=self.device, dtype=self.embed_0.dtype)  # (1, seq_len, hidden)
 
         dummy_ids = torch.zeros((1, self.seq_len), dtype=torch.long, device=self.device)
+        
         with self.model.trace(dummy_ids):
             self.model.model.embed_tokens.output = total
+            norm_resid = rearrange(self.model.model.norm.output.save(), "1 T C -> T C")
             logits = self.model.output.save()
 
         probs = torch.softmax(logits.logits[0, -1].float(), dim=-1)
-        return probs[self.tracked_ids].cpu()
+        del logits, lerped, total
+        return norm_resid, probs[self.tracked_ids].cpu()
 
 
 class HiddenLerp:
@@ -97,10 +102,12 @@ class HiddenLerp:
     def device(self) -> torch.device:
         return self.model.device
 
-    def forward(self, weight: float, layer: int) -> torch.Tensor:
+    @torch.no_grad()
+    def forward(self, weight: float, layer: int) -> tuple[torch.Tensor, torch.Tensor]:
         lerped = torch.lerp(self.h0[layer].to(self.device), self.h1[layer].to(self.device), weight)
         with self.model.trace(self._dummy_ids):
             self.model.model.layers[layer].output = lerped
+            norm_resid = rearrange(self.model.model.norm.output.save(), "1 T C -> T C")
             logits = self.model.output.save()
 
         probs = torch.softmax(logits.logits[0, -1].float(), dim=-1)
@@ -112,4 +119,4 @@ class HiddenLerp:
         elif torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        return result
+        return norm_resid, result

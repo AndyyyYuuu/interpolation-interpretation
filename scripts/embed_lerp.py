@@ -38,12 +38,14 @@ config = {
 
 run_dir = prep_run(config, output_root=args.output_root)
 
-exp = EmbedLerp(args.model_name, args.prompt, args.tok_0, args.tok_1, args.classes)
+experiment = EmbedLerp(args.model_name, args.prompt, args.tok_0, args.tok_1, args.classes)
 
 weights = [i / args.steps for i in range(args.steps + 1)]
-results = torch.stack([exp.forward(w) for w in tqdm.tqdm(weights)])  # (steps+1, n_classes)
+norm_resid, partial_probs = zip(*[experiment.forward(w) for w in tqdm.tqdm(weights)])
+partial_probs = torch.stack(partial_probs)  # (steps+1, n_classes)
+norm_resid = torch.stack(norm_resid)        # (steps+1, seq_len, hidden)
 
 torch.save(
-    {"results": results, "weights": weights, "labels": args.classes, "model": args.model_name},
+    {"partial_probs": partial_probs, "norm_resid": norm_resid, "weights": weights, "labels": args.classes, "model": args.model_name},
     run_dir / "output.pt",
 )
