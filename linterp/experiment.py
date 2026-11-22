@@ -63,9 +63,10 @@ class EmbedLerp:
         
         with self.model.trace(dummy_ids):
             self.model.model.embed_tokens.output = total
-            norm_resid = rearrange(self.model.model.norm.output.save(), "1 T C -> T C")
+            norm_resid = self.model.model.norm.output.save()
             logits = self.model.output.save()
 
+        norm_resid = rearrange(norm_resid, "1 T C -> T C")
         probs = torch.softmax(logits.logits[0, -1].float(), dim=-1)
         del logits, lerped, total
         return norm_resid, probs[self.tracked_ids].cpu()
@@ -107,9 +108,10 @@ class HiddenLerp:
         lerped = torch.lerp(self.h0[layer].to(self.device), self.h1[layer].to(self.device), weight)
         with self.model.trace(self._dummy_ids):
             self.model.model.layers[layer].output = lerped
-            norm_resid = rearrange(self.model.model.norm.output.save(), "1 T C -> T C")
+            norm_resid = self.model.model.norm.output.save()
             logits = self.model.output.save()
 
+        norm_resid = rearrange(norm_resid, "1 T C -> T C")
         probs = torch.softmax(logits.logits[0, -1].float(), dim=-1)
         result = probs[self.tracked_ids].cpu()
 

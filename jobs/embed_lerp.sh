@@ -5,7 +5,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --job-name=linterp-embed
 #SBATCH -o jobs/logs/JOB%j.out
-#SBATCH -e jobs/logs/JOB%j-err.out
 
 set -uo
 
