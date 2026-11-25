@@ -12,6 +12,7 @@ dependencies = [
     "matplotlib",
     "python-dotenv",
     "huggingface-hub",
+    "pandas"
 ]
 
 [build-system]

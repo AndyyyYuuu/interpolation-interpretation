@@ -3,6 +3,7 @@ import torch
 import tqdm
 from datetime import datetime
 from dotenv import load_dotenv
+import pandas as pd
 
 from linterp.experiment import EmbedLerp
 from scripts.prep_run import prep_run
@@ -12,7 +13,9 @@ load_dotenv()
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-name", nargs="+", default=["meta-llama/Llama-3.2-1B-Instruct"])
+    parser.add_argument("--model-name", nargs="+", default=None)
+    parser.add_argument("--models-path", default=None)
+    parser.add_argument("--models-variant", default=None)
     parser.add_argument("--prompt", default="The most common color for{} is")
     parser.add_argument("--tok-0", default=" apples")
     parser.add_argument("--tok-1", default=" bananas")
@@ -25,10 +28,23 @@ def parse_args() -> argparse.Namespace:
 
 args = parse_args()
 
+if (args.model_name is not None) == (args.models_path is not None):
+    raise ValueError("Exactly one of --model-name or --models-path must be set")
+
+if args.model_name is not None:
+    models_to_test = args.model_name
+else:
+    df = pd.read_csv(args.models_path, usecols=["model", "variant"])
+    if args.models_variant is not None:
+        df = df[df['variant'] == args.models_variant]
+        if df.empty:
+            print(f"Warning: no models of variant {args.models_variant}")
+    models_to_test = df['model'].tolist()
+
 config = {
     "experiment": "embed_lerp",
     "job_id": args.job_id,
-    "model_name": args.model_name,
+    "model_name": models_to_test,
     "prompt": args.prompt,
     "tok_0": args.tok_0,
     "tok_1": args.tok_1,
@@ -40,7 +56,7 @@ run_dir = prep_run(config, output_root=args.output_root)
 
 weights = [i / args.steps for i in range(args.steps + 1)]
 
-for model_name in tqdm.tqdm(args.model_name, desc="models", disable=len(args.model_name) == 1):
+for model_name in tqdm.tqdm(models_to_test, desc="models", disable=len(models_to_test) == 1):
     try:
         experiment = EmbedLerp(model_name, args.prompt, args.tok_0, args.tok_1, args.classes)
 
