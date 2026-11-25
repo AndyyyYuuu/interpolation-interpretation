@@ -35,17 +35,17 @@ class EmbedLerp:
         parts = prompt.split("{}")
         assert len(parts) == 2, "prompt must contain exactly one {}"
 
-        prefix_ids = tokenizer(parts[0], return_tensors="pt").input_ids[0]       # includes BOS
-        suffix_ids = tokenizer(parts[1], return_tensors="pt").input_ids[0, 1:]   # skip BOS
-        tok_0_id   = tokenizer(tok_0, return_tensors="pt").input_ids[0, 1]       # skip BOS
-        tok_1_id   = tokenizer(tok_1, return_tensors="pt").input_ids[0, 1]       # skip BOS
+        prefix_ids = tokenizer(parts[0], return_tensors="pt").input_ids[0]
+        suffix_ids = tokenizer(parts[1], return_tensors="pt", add_special_tokens=False).input_ids[0]
+        tok_0_id   = tokenizer(tok_0, return_tensors="pt", add_special_tokens=False).input_ids[0, 0]
+        tok_1_id   = tokenizer(tok_1, return_tensors="pt", add_special_tokens=False).input_ids[0, 0]
 
         self.prefix_embeds = embed_weight[prefix_ids]   # (prefix_len, hidden)
         self.suffix_embeds = embed_weight[suffix_ids]   # (suffix_len, hidden)
         self.embed_0 = embed_weight[tok_0_id]           # (hidden,)
         self.embed_1 = embed_weight[tok_1_id]           # (hidden,)
 
-        self.tracked_ids = [tokenizer(c, return_tensors="pt").input_ids[0, -1].item() for c in classes]
+        self.tracked_ids = [tokenizer(c, return_tensors="pt", add_special_tokens=False).input_ids[0, -1].item() for c in classes]
         self.seq_len = prefix_ids.shape[0] + 1 + suffix_ids.shape[0]
 
     @property
