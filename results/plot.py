@@ -3,10 +3,12 @@ Usage:
   python results/plot.py results/runs/<run_dir>/output.pt
 """
 
+import math
 import sys
 import torch
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from pathlib import Path
 
 COLORS = ["#ebc026", "#54cc2f", "#f04343", "#a7a9d6"]
 
@@ -55,14 +57,49 @@ def animate_hidden(data: dict, interval: int = 150) -> None:
     plt.show()
 
 
+def plot_embed_dir(dir: str | Path, cols: int = 3) -> None:
+    paths = sorted(Path(dir).glob("*.pt"))
+    if not paths:
+        print(f"No .pt files found in {dir}")
+        return
+
+    n = len(paths)
+    rows = math.ceil(n / cols)
+    fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 4 * rows), squeeze=False)
+    axes = axes.flatten()
+
+    for ax, path in zip(axes, paths):
+        data = torch.load(path, map_location="cpu", weights_only=False)
+        results = data.get("partial_probs", data.get("results"))
+        weights = data["weights"]
+        labels  = data["labels"]
+        model   = data["model"].split("/")[-1]
+
+        for i, label in enumerate(labels):
+            ax.plot(weights, results[:, i].float().detach().numpy(), label=label, color=COLORS[i % len(COLORS)])
+        ax.set_xlabel("Interpolation weight")
+        ax.set_ylabel("Next-token probability")
+        ax.set_title(model)
+        ax.legend(fontsize="small")
+
+    for ax in axes[n:]:
+        ax.set_visible(False)
+
+    plt.tight_layout()
+    plt.show()
+
 if __name__ == "__main__":
     path = sys.argv[1]
-    data = torch.load(path, map_location="cpu")
-    results = data["results"]
+    if path[-3:] == ".pt":
+        data = torch.load(path, map_location="cpu")
+        results = data["results"]
 
-    if results.dim() == 2:
-        plot_embed(data)
-    elif results.dim() == 3:
-        animate_hidden(data)
-    else:
-        raise ValueError(f"Unexpected results shape: {results.shape}")
+        if results.dim() == 2:
+            plot_embed(data)
+        elif results.dim() == 3:
+            animate_hidden(data)
+        else:
+            raise ValueError(f"Unexpected results shape: {results.shape}")
+    else: 
+        plot_embed_dir(path, 5)
+
