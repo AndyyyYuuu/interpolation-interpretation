@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=2:00:00
+#SBATCH --time=5:00:00
 #SBATCH --mem=24GB
 #SBATCH --cpus-per-task=4
 #SBATCH --gres=gpu:1
@@ -17,10 +17,10 @@ echo "start: $(date)"
 
 source .venv/bin/activate
 
-PYTHONPATH="$PWD" .venv/bin/python scripts/hidden_lerp.py \
+PYTHONPATH="$PWD" .venv/bin/python scripts/lerp.py \
+    --hidden \
     --job-id "$JOB_ID" \
-    --interp slerp \
-    --model
-    "$@" 
+    --model-name "Qwen/Qwen2.5-0.5B" "Qwen/Qwen2.5-1.5B" "Qwen/Qwen2.5-3B" "Qwen/Qwen2.5-7B" \
+    "$@"
 
 echo "end: $(date)"

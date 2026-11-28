@@ -17,7 +17,8 @@ echo "start: $(date)"
 
 source .venv/bin/activate
 
-PYTHONPATH="$PWD" .venv/bin/python scripts/embed_lerp.py \
+PYTHONPATH="$PWD" .venv/bin/python scripts/lerp.py \
+    --embed \
     --job-id "$JOB_ID" \
     --models-path "models.csv" \
     "$@"
