@@ -4,7 +4,7 @@ import tqdm
 from datetime import datetime
 from dotenv import load_dotenv
 
-from linterp.experiment import HiddenLerp
+from linterp.experiment import INTERP_FNS, HiddenLerp
 from scripts.prep_run import prep_run
 
 load_dotenv()
@@ -16,6 +16,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--str-0", default="The most common color for bananas is")
     parser.add_argument("--str-1", default="The most common color for apples is")
     parser.add_argument("--classes", nargs="+", default=[" yellow", " green", " red"])
+    parser.add_argument("--interp", default="lerp", choices=list(INTERP_FNS))
     parser.add_argument("--steps", type=int, default=100)
     parser.add_argument("--job-id", default=datetime.now().strftime("%Y%m%d%H%M"))
     parser.add_argument("--output-root", default="results/runs")
@@ -27,6 +28,7 @@ args = parse_args()
 config = {
     "experiment": "hidden_lerp",
     "job_id": args.job_id,
+    "interp": args.interp,
     "model_name": args.model_name,
     "str_0": args.str_0,
     "str_1": args.str_1,
@@ -36,7 +38,7 @@ config = {
 
 run_dir = prep_run(config, output_root=args.output_root)
 
-experiment = HiddenLerp(args.model_name, args.str_0, args.str_1, args.classes)
+experiment = HiddenLerp(args.model_name, args.str_0, args.str_1, args.classes, interp_fn=INTERP_FNS[args.interp])
 
 weights = [i / args.steps for i in range(args.steps + 1)]
 layer_resids, layer_probs = [], []

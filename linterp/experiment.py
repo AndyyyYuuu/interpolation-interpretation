@@ -1,7 +1,9 @@
 import os
+from typing import Callable
+
 import torch
-from nnsight import LanguageModel
 from einops import rearrange
+from nnsight import LanguageModel
 
 _HF_LOGIN_DONE = False
 
@@ -21,10 +23,29 @@ def _hf_login_if_needed() -> None:
     _HF_LOGIN_DONE = True
 
 
+InterpFn = Callable[[torch.Tensor, torch.Tensor, float], torch.Tensor]
+
+
+def slerp(v0: torch.Tensor, v1: torch.Tensor, t: float) -> torch.Tensor:
+    v0_n = v0 / v0.norm()
+    v1_n = v1 / v1.norm()
+    omega = torch.acos(torch.clamp(v0_n @ v1_n, -1.0, 1.0))
+    if omega.abs() < 1e-6:
+        return torch.lerp(v0, v1, t)
+    s = torch.sin(omega)
+    return (torch.sin((1 - t) * omega) / s) * v0 + (torch.sin(t * omega) / s) * v1
+
+
+INTERP_FNS: dict[str, InterpFn] = {
+    "lerp": lambda v0, v1, t: torch.lerp(v0, v1, t),
+    "slerp": slerp,
+}
+
+
 class EmbedLerp:
     """Interpolates between two token embeddings at a single position in a prompt."""
 
-    def __init__(self, model_name: str, prompt: str, tok_0: str, tok_1: str, classes: list[str]):
+    def __init__(self, model_name: str, prompt: str, tok_0: str, tok_1: str, classes: list[str], interp_fn: InterpFn = torch.lerp):
         _hf_login_if_needed()
         self.model = LanguageModel(model_name, device_map="auto", dispatch=True, torch_dtype=torch.float32)
         self.name = model_name
@@ -47,6 +68,7 @@ class EmbedLerp:
 
         self.tracked_ids = [tokenizer(c, return_tensors="pt", add_special_tokens=False).input_ids[0, -1].item() for c in classes]
         self.seq_len = prefix_ids.shape[0] + 1 + suffix_ids.shape[0]
+        self.interp_fn = interp_fn
 
     @property
     def device(self) -> torch.device:
@@ -54,7 +76,7 @@ class EmbedLerp:
 
     @torch.no_grad()
     def forward(self, weight: float) -> tuple[torch.Tensor, torch.Tensor]:
-        lerped = torch.lerp(self.embed_0, self.embed_1, weight)
+        lerped = self.interp_fn(self.embed_0, self.embed_1, weight)
         total = torch.cat([
             self.prefix_embeds, lerped.unsqueeze(0), self.suffix_embeds
         ], dim=0).unsqueeze(0).to(device=self.device, dtype=self.embed_0.dtype)  # (1, seq_len, hidden)
@@ -75,7 +97,7 @@ class EmbedLerp:
 class HiddenLerp:
     """Interpolates hidden states between two prompts at a given layer, sweeping across layers."""
 
-    def __init__(self, model_name: str, str_0: str, str_1: str, classes: list[str]):
+    def __init__(self, model_name: str, str_0: str, str_1: str, classes: list[str], interp_fn: InterpFn = torch.lerp):
         _hf_login_if_needed()
         self.model = LanguageModel(model_name, device_map="auto", dispatch=True, torch_dtype=torch.float32)
         self.name = model_name
@@ -89,6 +111,7 @@ class HiddenLerp:
 
         self.tracked_ids = [tokenizer(c, return_tensors="pt").input_ids[0, -1].item() for c in classes]
         self._dummy_ids = torch.zeros_like(ids_0)
+        self.interp_fn = interp_fn
 
         with self.model.trace(ids_0):
             h0 = [self.model.model.layers[i].output.save() for i in range(self.n_layers)]
@@ -105,7 +128,7 @@ class HiddenLerp:
 
     @torch.no_grad()
     def forward(self, weight: float, layer: int) -> tuple[torch.Tensor, torch.Tensor]:
-        lerped = torch.lerp(self.h0[layer].to(self.device), self.h1[layer].to(self.device), weight)
+        lerped = self.interp_fn(self.h0[layer].to(self.device), self.h1[layer].to(self.device), weight)
         with self.model.trace(self._dummy_ids):
             self.model.model.layers[layer].output = lerped
             norm_resid = self.model.model.norm.output.save()

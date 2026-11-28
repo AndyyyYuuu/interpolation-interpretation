@@ -17,6 +17,10 @@ echo "start: $(date)"
 
 source .venv/bin/activate
 
-PYTHONPATH="$PWD" .venv/bin/python scripts/hidden_lerp.py --job-id "$JOB_ID" "$@"
+PYTHONPATH="$PWD" .venv/bin/python scripts/hidden_lerp.py \
+    --job-id "$JOB_ID" \
+    --interp slerp \
+    --model
+    "$@" 
 
 echo "end: $(date)"
