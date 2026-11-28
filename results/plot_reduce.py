@@ -27,7 +27,7 @@ def plane_proj(data: torch.Tensor, v1: torch.Tensor, v2: torch.Tensor, v3: torch
 # data format for reference:
 # {"partial_probs": partial_probs, "norm_resid": norm_resid, "weights": weights, "labels": args.classes, "model": args.model_name}
 
-def graph_plane_proj(path: str, v1: torch.Tensor, v2: torch.Tensor, v3: torch.Tensor, v1_label: str="", v2_label: str="", v3_label: str=""):
+def graph_plane_proj(path: str | Path, v1: torch.Tensor, v2: torch.Tensor, v3: torch.Tensor, v1_label: str="", v2_label: str="", v3_label: str=""):
     data = torch.load(path, map_location="cpu", weights_only=True)
     norm_resid = data["norm_resid"]
     weights = data["weights"]
@@ -122,21 +122,61 @@ def graph_plane_proj_3d(path: str | Path, v1: torch.Tensor, v2: torch.Tensor, v3
     return ani
 
 
-if __name__ == "__main__":
+def load_embed_weight_requests(model_name: str, key: str = "model.embed_tokens.weight", cache_dir: str | None = None) -> torch.Tensor:
     import json
-    from transformers import AutoTokenizer, AutoModelForCausalLM
+    import struct
+    import requests
+    from huggingface_hub import get_token, hf_hub_download, hf_hub_url
 
+    token = get_token()
+    auth = {"Authorization": f"Bearer {token}"} if token else {}
+
+    # Resolve which shard contains the key
+    try:
+        shard_name = "model.safetensors"
+        url = hf_hub_url(model_name, shard_name)
+        requests.head(url, headers=auth, allow_redirects=True).raise_for_status()
+    except Exception:
+        index_path = hf_hub_download(model_name, "model.safetensors.index.json", cache_dir=cache_dir)
+        with open(index_path) as f:
+            shard_name = json.load(f)["weight_map"][key]
+        url = hf_hub_url(model_name, shard_name)
+
+    # Read just the safetensors header to find byte offsets
+    header_size = struct.unpack("<Q", requests.get(url, headers={**auth, "Range": "bytes=0-7"}, allow_redirects=True).content)[0]
+    header = json.loads(requests.get(url, headers={**auth, "Range": f"bytes=8-{7 + header_size}"}, allow_redirects=True).content)
+
+    meta = header[key]
+    begin, end = meta["data_offsets"]
+    data_start = 8 + header_size
+
+    raw = requests.get(url, headers={**auth, "Range": f"bytes={data_start + begin}-{data_start + end - 1}"}, allow_redirects=True).content
+
+    dtype_map = {"F32": torch.float32, "F16": torch.float16, "BF16": torch.bfloat16}
+    tensor = torch.frombuffer(bytearray(raw), dtype=dtype_map[meta["dtype"]]).reshape(meta["shape"])
+    return tensor.to(torch.float32)
+
+
+def load_embed_weight(model_name: str, cache_dir: str | None = None) -> torch.Tensor:
+    from transformers import AutoModelForCausalLM
+    model = AutoModelForCausalLM.from_pretrained(model_name, cache_dir=cache_dir, device_map="cpu", torch_dtype=torch.float32)
+    return model.model.embed_tokens.weight.detach()
+
+
+if __name__ == "__main__":
+    from transformers import AutoTokenizer
+
+    MODEL_NAME = "meta-llama/Llama-3.2-3B"
+    HF_CACHE_DIR = "/Volumes/backrooms/huggingface"
     classes = [" yellow", " green", " red"]
-    dir = Path(sys.argv[1])
+    path = Path(sys.argv[1])
 
-    config = json.loads((dir / "config.json").read_text())
-    tokenizer = AutoTokenizer.from_pretrained(config["model_name"])
-    model = AutoModelForCausalLM.from_pretrained(config["model_name"], device_map="cpu", torch_dtype=torch.float32)
-    embed_weight = model.model.embed_tokens.weight.detach()
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME, cache_dir=HF_CACHE_DIR)
+    embed_weight = load_embed_weight_requests(MODEL_NAME, cache_dir=HF_CACHE_DIR)
 
     def class_vec(cls: str) -> torch.Tensor:
-        tok_id = tokenizer(cls, return_tensors="pt").input_ids[0, -1]
+        tok_id = tokenizer(cls, return_tensors="pt", add_special_tokens=False).input_ids[0, -1]
         return embed_weight[tok_id]
 
     v1, v2, v3 = [class_vec(c) for c in classes]
-    graph_plane_proj_3d(dir / "output.pt", v1, v2, v3, *classes, layer=0)
+    graph_plane_proj_3d(path, v1, v2, v3, *classes)

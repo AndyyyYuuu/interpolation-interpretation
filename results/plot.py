@@ -3,6 +3,7 @@ Usage:
   python results/plot.py results/runs/<run_dir>/output.pt
 """
 
+import csv
 import math
 import sys
 import torch
@@ -11,6 +12,14 @@ import matplotlib.animation as animation
 from pathlib import Path
 
 COLORS = ["#ebc026", "#54cc2f", "#f04343", "#a7a9d6"]
+
+
+def get_model_prop(model: str, prop: str, path: str | Path = "models.csv"):
+    with open(path, newline="") as f:
+        for row in csv.DictReader(f):
+            if row["model"] == model:
+                return row[prop]
+    raise KeyError(f"{model!r} not found in {path}")
 
 
 def plot_embed(data: dict) -> None:
@@ -63,13 +72,22 @@ def plot_embed_dir(dir: str | Path, cols: int = 3) -> None:
         print(f"No .pt files found in {dir}")
         return
 
-    n = len(paths)
+    dataset = []
+    for path in paths:
+        data = torch.load(path, map_location="cpu", weights_only=False)
+        try:
+            params_b = float(get_model_prop(data["model"], "params_b"))
+        except KeyError:
+            params_b = 0.0
+        dataset.append((params_b, data))
+    dataset.sort(key=lambda e: e[0])
+
+    n = len(dataset)
     rows = math.ceil(n / cols)
-    fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 4 * rows), squeeze=False)
+    fig, axes = plt.subplots(rows, cols, figsize=(min(3 * cols, 14), min(2.2 * rows, 7)), squeeze=False, constrained_layout=True)
     axes = axes.flatten()
 
-    for ax, path in zip(axes, paths):
-        data = torch.load(path, map_location="cpu", weights_only=False)
+    for ax, (_, data) in zip(axes, dataset):
         results = data.get("partial_probs", data.get("results"))
         weights = data["weights"]
         labels  = data["labels"]
@@ -77,15 +95,20 @@ def plot_embed_dir(dir: str | Path, cols: int = 3) -> None:
 
         for i, label in enumerate(labels):
             ax.plot(weights, results[:, i].float().detach().numpy(), label=label, color=COLORS[i % len(COLORS)])
-        ax.set_xlabel("Interpolation weight")
-        ax.set_ylabel("Next-token probability")
-        ax.set_title(model)
-        ax.legend(fontsize="small")
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.set_xlabel("Interpolation weight", fontsize=7)
+        ax.set_ylabel("Probability", fontsize=7)
+        ax.set_title(model, fontsize=8)
+        ax.tick_params(labelsize=6)
+
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower right", fontsize=7)
+    
 
     for ax in axes[n:]:
         ax.set_visible(False)
 
-    plt.tight_layout()
     plt.show()
 
 if __name__ == "__main__":
@@ -101,5 +124,5 @@ if __name__ == "__main__":
         else:
             raise ValueError(f"Unexpected results shape: {results.shape}")
     else: 
-        plot_embed_dir(path, 5)
+        plot_embed_dir(path, 7)
 
