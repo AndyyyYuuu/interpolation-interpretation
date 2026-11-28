@@ -27,13 +27,21 @@ InterpFn = Callable[[torch.Tensor, torch.Tensor, float], torch.Tensor]
 
 
 def slerp(v0: torch.Tensor, v1: torch.Tensor, t: float) -> torch.Tensor:
-    v0_n = v0 / v0.norm()
-    v1_n = v1 / v1.norm()
-    omega = torch.acos(torch.clamp(v0_n @ v1_n, -1.0, 1.0))
-    if omega.abs() < 1e-6:
-        return torch.lerp(v0, v1, t)
+    shape = v0.shape
+    v0 = v0.reshape(-1, shape[-1])
+    v1 = v1.reshape(-1, shape[-1])
+
+    v0_n = v0 / v0.norm(dim=-1, keepdim=True)
+    v1_n = v1 / v1.norm(dim=-1, keepdim=True)
+    dot = (v0_n * v1_n).sum(dim=-1).clamp(-1.0, 1.0)
+    omega = torch.acos(dot)
     s = torch.sin(omega)
-    return (torch.sin((1 - t) * omega) / s) * v0 + (torch.sin(t * omega) / s) * v1
+
+    near_zero = s.abs() < 1e-6
+    c0 = torch.where(near_zero, torch.full_like(s, 1 - t), torch.sin((1 - t) * omega) / s)
+    c1 = torch.where(near_zero, torch.full_like(s, t),     torch.sin(t * omega) / s)
+
+    return (c0.unsqueeze(-1) * v0 + c1.unsqueeze(-1) * v1).reshape(shape)
 
 
 INTERP_FNS: dict[str, InterpFn] = {
